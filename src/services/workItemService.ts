@@ -182,6 +182,10 @@ export class WorkItemService {
   private async toWorkItemInfoV2(item: PingCodeWorkItem): Promise<WorkItemInfoV2> {
     const token = item.public_image_token;
 
+    // 调试日志：确认 API 返回的 token
+    console.log('[DEBUG] toWorkItemInfoV2 - public_image_token:', token ? `${token.substring(0, 10)}...` : 'undefined');
+    console.log('[DEBUG] toWorkItemInfoV2 - item keys:', Object.keys(item).join(', '));
+
     // 处理 description
     let description: ProcessedPropertyField | undefined;
     if (item.description && isHtmlContent(item.description)) {

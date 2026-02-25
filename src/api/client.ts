@@ -207,6 +207,11 @@ export class PingCodeApiClient {
       // Get token (from static config or token manager)
       const token = await this.getToken();
 
+      // 调试日志：记录带 access_token 的完整请求 URL（便于手动测试）
+      const debugUrl = new URL(url.toString());
+      debugUrl.searchParams.set('access_token', token);
+      logger.info({ url: debugUrl.toString() }, 'API Request (with access_token)');
+
       // 每次请求创建独立的 AbortController（超时自动取消）
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), config.requestTimeout);

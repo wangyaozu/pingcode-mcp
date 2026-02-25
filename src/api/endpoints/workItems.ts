@@ -16,7 +16,10 @@ export async function getWorkItemByIdentifier(
   try {
     const params: Record<string, string | number | undefined> = { identifier };
     if (includeImageToken) {
-      params.include_public_image_token = 'true';
+      // 指定需要获取图片 token 的字段
+      // description: 工作项描述
+      // properties.shiyitu: 自定义字段"示意图"
+      params.include_public_image_token = 'description,properties.shiyitu';
     }
     const response = await apiClient.request<PaginatedResponse<PingCodeWorkItem>>(
       '/v1/project/work_items',
@@ -26,6 +29,10 @@ export async function getWorkItemByIdentifier(
     // 返回列表中的第一个匹配项
     if (response.values && response.values.length > 0) {
       const workItem = response.values[0];
+
+      // 调试日志：记录 API 返回的完整工作项数据
+      logger.debug({ workItem }, 'getWorkItemByIdentifier - API response');
+
       // 缓存结果（使用 ID 作为 key）
       await cache.set(
         CacheKeys.workItem(workItem.id),
@@ -62,7 +69,10 @@ export async function getWorkItem(
   try {
     const params: Record<string, string | number | undefined> = {};
     if (includeImageToken) {
-      params.include_public_image_token = 'true';
+      // 指定需要获取图片 token 的字段
+      // description: 工作项描述
+      // properties.shiyitu: 自定义字段"示意图"
+      params.include_public_image_token = 'description,properties.shiyitu';
     }
     const workItem = await apiClient.request<PingCodeWorkItem>(
       `/v1/project/work_items/${workItemId}`,
