@@ -20,16 +20,43 @@ npm install
 npm run build
 ```
 
-### 2. 获取 PingCode Token
+### 2. 配置 PingCode 认证
+
+支持两种认证方式：
+
+#### 方式一：Client Credentials（推荐）
+
+自动获取和刷新 Token，无需手动维护。
 
 1. 登录 PingCode → 点右上角头像 → 管理后台 → 应用 → 凭据管理
-2. 获取 `client_id` 和 `client_secret`，运行：
+2. 创建应用凭据，获取 `client_id` 和 `client_secret`
+3. 在 `.env` 中配置：
+
+```bash
+PINGCODE_CLIENT_ID=your_client_id
+PINGCODE_CLIENT_SECRET=your_client_secret
+```
+
+> Token 会在过期前 5 分钟自动刷新，无需人工干预。
+
+#### 方式二：静态 Token
+
+适合快速测试场景。Token 过期需手动更新。
+
+1. 使用 Client Credentials 获取 Token：
 
 ```bash
 curl -s "https://open.pingcode.com/v1/auth/token?grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET"
 ```
 
-复制返回的 `access_token`（有效期约 30 天）。
+2. 复制返回的 `access_token`（有效期约 30 天）
+3. 在 `.env` 中配置：
+
+```bash
+PINGCODE_TOKEN=你的access_token
+```
+
+> 注意：两种方式二选一，推荐使用 Client Credentials。
 
 ### 3. 配置环境变量
 
@@ -37,10 +64,16 @@ curl -s "https://open.pingcode.com/v1/auth/token?grant_type=client_credentials&c
 cp .env.example .env
 ```
 
-编辑 `.env` 文件，填入 Token：
+编辑 `.env` 文件，填入认证信息：
 
 ```bash
-PINGCODE_TOKEN=你的access_token
+# 方式一：Client Credentials（推荐）
+PINGCODE_CLIENT_ID=your_client_id
+PINGCODE_CLIENT_SECRET=your_client_secret
+
+# 方式二：静态 Token
+# PINGCODE_TOKEN=你的access_token
+
 TRANSPORT_MODE=stdio
 ```
 
@@ -51,6 +84,26 @@ TRANSPORT_MODE=stdio
 编辑配置文件：
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+**方式一：Client Credentials（推荐）**
+
+```json
+{
+  "mcpServers": {
+    "pingcode": {
+      "command": "node",
+      "args": ["/你的路径/pingcode-mcp/dist/index.js"],
+      "env": {
+        "PINGCODE_CLIENT_ID": "your_client_id",
+        "PINGCODE_CLIENT_SECRET": "your_client_secret",
+        "TRANSPORT_MODE": "stdio"
+      }
+    }
+  }
+}
+```
+
+**方式二：静态 Token**
 
 ```json
 {
@@ -150,11 +203,15 @@ curl -s -X DELETE http://127.0.0.1:3000/mcp \
 | `team_work_summary` | 团队工时汇总（Top N 工作项，含 0 工时成员） |
 | `list_users` | 成员列表（带缓存，TTL 1h） |
 | `list_workloads` | 工时明细（支持 filter_project_id） |
-| `get_work_item` | 工作项详情 |
+| `get_work_item` | 工作项详情（v2 支持图片 Base64 下载） |
 | `get_metrics` | 运行指标 |
 | `get_tool_versions` | 工具版本信息 |
 
-**特性**：中文时间别名（`上周`、`本月`）、超 3 月自动分片、ISO 8601 周计算、姓名模糊匹配、group_by=type 类型聚合
+**特性**：
+- 中文时间别名（`上周`、`本月`）
+- 超 3 月自动分片、ISO 8601 周计算
+- 姓名模糊匹配、group_by=type 类型聚合
+- **工作项图片自动下载并转为 Base64**（支持 description 和自定义字段，如 properties.shiyitu）
 
 ---
 
@@ -172,7 +229,10 @@ curl -s -X DELETE http://127.0.0.1:3000/mcp \
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `PINGCODE_TOKEN` | API Token | **必填** |
+| `PINGCODE_TOKEN` | 静态 API Token（与 Client Credentials 二选一） | - |
+| `PINGCODE_CLIENT_ID` | Client ID（与 SECRET 配合使用，推荐） | - |
+| `PINGCODE_CLIENT_SECRET` | Client Secret | - |
+| `TOKEN_MODE` | Token 模式（`enterprise` / `user`） | `enterprise` |
 | `TRANSPORT_MODE` | 传输模式 | `stdio` |
 | `HTTP_PORT` | HTTP 端口 | `3000` |
 | `HTTP_HOST` | HTTP 绑定地址 | `127.0.0.1` |
@@ -186,7 +246,9 @@ curl -s -X DELETE http://127.0.0.1:3000/mcp \
 | `NAME_MATCH_STRATEGY` | 姓名匹配策略 | `best` |
 | `LOG_LEVEL` | 日志级别 | `info` |
 
-> 注意：HTTP 模式下若请求带 `Origin` 头，必须配置 `ALLOWED_ORIGINS`；未配置时按 default-deny 拒绝（非浏览器无 `Origin` 请求不受影响）。
+> 注意：
+> - 认证方式：`PINGCODE_TOKEN` 或 (`PINGCODE_CLIENT_ID` + `PINGCODE_CLIENT_SECRET`) 必须配置其中一种
+> - HTTP 模式下若请求带 `Origin` 头，必须配置 `ALLOWED_ORIGINS`；未配置时按 default-deny 拒绝（非浏览器无 `Origin` 请求不受影响）
 
 ---
 
