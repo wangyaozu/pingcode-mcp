@@ -1,6 +1,7 @@
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { metrics } from '../utils/metrics.js';
+import { TokenManager } from '../auth/tokenManager.js';
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -106,16 +107,50 @@ export class RateLimiter {
 
 export class PingCodeApiClient {
   private readonly baseUrl: string;
-  private readonly token: string;
+  private readonly tokenManager: TokenManager | null = null;
+  private readonly staticToken: string | null = null;
   private readonly rateLimiter: RateLimiter;
 
   constructor() {
     this.baseUrl = config.pingcode.baseUrl;
-    this.token = config.pingcode.token;
     this.rateLimiter = new RateLimiter(
       config.rateLimit.maxRequestsPerMin,
       60 * 1000
     );
+
+    // Prefer client_credentials flow if credentials are provided
+    if (config.pingcode.clientId && config.pingcode.clientSecret) {
+      this.tokenManager = new TokenManager({
+        baseUrl: config.pingcode.baseUrl,
+        clientId: config.pingcode.clientId,
+        clientSecret: config.pingcode.clientSecret,
+        refreshBufferMs: config.pingcode.tokenRefreshBufferMs,
+      });
+      logger.info('Using client_credentials mode for token management');
+    } else if (config.pingcode.token) {
+      this.staticToken = config.pingcode.token;
+      logger.info('Using static token mode');
+    }
+  }
+
+  /**
+   * Get the current access token (from static config or token manager).
+   */
+  private async getToken(): Promise<string> {
+    if (this.tokenManager) {
+      return this.tokenManager.getToken();
+    }
+    if (this.staticToken) {
+      return this.staticToken;
+    }
+    throw new Error('No token available: configure PINGCODE_TOKEN or PINGCODE_CLIENT_ID + PINGCODE_CLIENT_SECRET');
+  }
+
+  /**
+   * Check if using client_credentials mode.
+   */
+  isUsingClientCredentials(): boolean {
+    return this.tokenManager !== null;
   }
 
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -161,12 +196,16 @@ export class PingCodeApiClient {
 
     const startTime = Date.now();
     let lastError: Error | null = null;
+    let tokenRefreshed = false; // Track if we've already refreshed token for 401
 
     for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
       // Check external signal before each retry attempt
       if (signal?.aborted) {
         throw new DOMException('The operation was aborted', 'AbortError');
       }
+
+      // Get token (from static config or token manager)
+      const token = await this.getToken();
 
       // 每次请求创建独立的 AbortController（超时自动取消）
       const controller = new AbortController();
@@ -181,7 +220,7 @@ export class PingCodeApiClient {
         const response = await fetch(url.toString(), {
           method,
           headers: {
-            'Authorization': `Bearer ${this.token}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: body ? JSON.stringify(body) : undefined,
@@ -192,6 +231,14 @@ export class PingCodeApiClient {
         const duration = Date.now() - startTime;
 
         if (!response.ok) {
+          // Handle 401: refresh token and retry once (only in client_credentials mode)
+          if (response.status === 401 && this.tokenManager && !tokenRefreshed) {
+            logger.warn({ endpoint }, 'Received 401, refreshing token and retrying');
+            await this.tokenManager.forceRefresh();
+            tokenRefreshed = true;
+            continue; // Retry immediately without counting against retry limit
+          }
+
           const shouldRetry = RETRY_CONFIG.retryableStatus.includes(response.status);
 
           if (shouldRetry && attempt < RETRY_CONFIG.maxRetries) {

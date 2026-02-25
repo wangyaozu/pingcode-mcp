@@ -42,7 +42,16 @@ export const logger = pino({
     service: 'pingcode-mcp',
   },
   // Redact sensitive fields
-  redact: ['token', 'authorization', 'PINGCODE_TOKEN'],
+  redact: [
+    'token',
+    'authorization',
+    'PINGCODE_TOKEN',
+    'PINGCODE_CLIENT_SECRET',
+    'clientSecret',
+    'client_secret',
+    'access_token',
+    'accessToken',
+  ],
 });
 
 export type Logger = typeof logger;

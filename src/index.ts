@@ -5,6 +5,7 @@ import { cache } from './cache/index.js';
 import { startHttpServer } from './server/http.js';
 import { createMcpServer } from './server/mcp.js';
 import { type UserContext } from './auth/userContext.js';
+import { apiClient } from './api/client.js';
 
 async function main() {
   // HTTP 模式强制要求至少一个 API Key
@@ -28,12 +29,31 @@ async function main() {
     // HTTP mode: X-User-Id is enforced per-session in http.ts
   }
 
+  // Log token source mode
+  const tokenSource = config.pingcode.clientId && config.pingcode.clientSecret
+    ? 'client_credentials'
+    : 'static_token';
+
   logger.info({
     transportMode: config.server.transportMode,
     timezone: config.timezone,
     authEnabled: !!(config.auth.apiKey || config.auth.apiKeys),
     tokenMode: config.pingcode.tokenMode,
+    tokenSource,
   }, 'Starting PingCode MCP Server');
+
+  // Pre-fetch token in client_credentials mode to fail fast if credentials are invalid
+  if (apiClient.isUsingClientCredentials()) {
+    try {
+      logger.info('Pre-fetching access token...');
+      await apiClient.request('/v1/directory/users');
+      logger.info('Access token acquired successfully');
+    } catch (error) {
+      logger.error({ error }, 'Failed to acquire initial access token');
+      console.error('Error: Failed to acquire access token. Check PINGCODE_CLIENT_ID and PINGCODE_CLIENT_SECRET');
+      process.exit(1);
+    }
+  }
 
   // Connect to cache
   try {

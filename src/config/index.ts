@@ -5,7 +5,13 @@ const ConfigSchema = z.object({
   // PingCode API
   pingcode: z.object({
     baseUrl: z.string().url().default('https://open.pingcode.com'),
-    token: z.string().min(1, 'PINGCODE_TOKEN is required'),
+    // Static token (optional when using client_credentials)
+    token: z.string().optional(),
+    // Client credentials for automatic token management
+    clientId: z.string().optional(),
+    clientSecret: z.string().optional(),
+    // Token refresh buffer (5 minutes before expiration)
+    tokenRefreshBufferMs: z.number().default(5 * 60 * 1000),
     tokenMode: z.enum(['enterprise', 'user']).default('enterprise'),
     userId: z.string().optional(),
   }),
@@ -82,7 +88,19 @@ const ConfigSchema = z.object({
     // When pagination truncation rate exceeds this threshold, emit elevated warnings
     truncationAlertThreshold: z.number().min(0).max(1).default(0.3),
   }).default({}),
-});
+})
+  // Validation: token or (clientId + clientSecret) must be provided
+  .refine(
+    (data) => {
+      const hasToken = !!data.pingcode.token;
+      const hasCredentials = !!(data.pingcode.clientId && data.pingcode.clientSecret);
+      return hasToken || hasCredentials;
+    },
+    {
+      message: 'PINGCODE_TOKEN or (PINGCODE_CLIENT_ID + PINGCODE_CLIENT_SECRET) is required',
+      path: ['pingcode'],
+    }
+  );
 
 export type Config = z.infer<typeof ConfigSchema>;
 
@@ -91,6 +109,11 @@ function loadConfig(): Config {
     pingcode: {
       baseUrl: process.env.PINGCODE_BASE_URL,
       token: process.env.PINGCODE_TOKEN,
+      clientId: process.env.PINGCODE_CLIENT_ID,
+      clientSecret: process.env.PINGCODE_CLIENT_SECRET,
+      tokenRefreshBufferMs: process.env.PINGCODE_TOKEN_REFRESH_BUFFER_MS
+        ? parseInt(process.env.PINGCODE_TOKEN_REFRESH_BUFFER_MS, 10)
+        : undefined,
       tokenMode: process.env.TOKEN_MODE,
       userId: process.env.PINGCODE_USER_ID,
     },

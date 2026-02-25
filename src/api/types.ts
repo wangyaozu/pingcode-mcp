@@ -75,14 +75,40 @@ export interface PingCodeProject {
   type?: string;
 }
 
+// 图片信息（包含 Base64 数据）
+export interface ImageInfo {
+  url: string;           // 原始图片 URL
+  originUrl?: string;    // 原始 URL
+  alt?: string;          // 替代文本
+  size?: number;         // 文件大小（字节）
+  mimeType?: string;     // MIME 类型 (image/png, image/jpeg 等)
+  base64?: string;       // Base64 编码的图片数据（Claude Code 可直接识别）
+  dataUri?: string;      // 完整的 data URI (data:image/png;base64,...)
+}
+
+// properties 中的 HTML 字段处理后结构
+export interface ProcessedPropertyField {
+  raw: string;                    // 原始 HTML
+  text?: string;                  // 纯文本内容
+  images: ImageInfo[];            // 提取的图片列表（含 base64）
+}
+
+// 工作项 properties 类型（动态字段）
+export interface PingCodeWorkItemProperties {
+  [key: string]: unknown;  // 其他自定义字段保持原样
+}
+
 export interface PingCodeWorkItem {
   id: string;
   identifier: string;
   title: string;
+  description?: string;  // HTML 格式的详细描述
   project: PingCodeProject;
   assignee?: PingCodeUser;
   state?: string;
   type?: string;
+  properties?: PingCodeWorkItemProperties;  // 自定义字段
+  public_image_token?: string;  // API 返回的图片 token
 }
 
 export interface PaginatedResponse<T> {

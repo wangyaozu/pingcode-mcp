@@ -32,8 +32,10 @@ import {
 } from './listWorkloads.js';
 
 import {
-  getWorkItem,
+  getWorkItemV1,
+  getWorkItemV2,
   getWorkItemToolDefinition,
+  getWorkItemV2ToolDescription,
   GetWorkItemInputSchema,
 } from './getWorkItem.js';
 
@@ -94,9 +96,21 @@ export function registerAllTools(): void {
   });
 
   // ============ get_work_item ============
-  toolRegistry.register('get_work_item', 'v1', {
+  // v2 版本（包含图片处理）成为 current
+  toolRegistry.register('get_work_item', 'v2', {
     status: 'current',
-    handler: getWorkItem as (input: unknown, signal?: AbortSignal) => Promise<unknown>,
+    handler: getWorkItemV2 as (input: unknown, signal?: AbortSignal) => Promise<unknown>,
+    inputSchema: GetWorkItemInputSchema,
+    definition: {
+      ...getWorkItemToolDefinition,
+      description: getWorkItemV2ToolDescription,
+    },
+  });
+
+  // v1 版本保持 supported（向后兼容）
+  toolRegistry.register('get_work_item', 'v1', {
+    status: 'supported',
+    handler: getWorkItemV1 as (input: unknown, signal?: AbortSignal) => Promise<unknown>,
     inputSchema: GetWorkItemInputSchema,
     definition: getWorkItemToolDefinition,
   });

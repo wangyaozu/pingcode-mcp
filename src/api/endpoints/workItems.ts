@@ -2,23 +2,71 @@ import { apiClient, PingCodeApiError } from '../client.js';
 import { cache, CacheKeys } from '../../cache/index.js';
 import { config } from '../../config/index.js';
 import { logger } from '../../utils/logger.js';
-import type { PingCodeWorkItem } from '../types.js';
+import type { PingCodeWorkItem, PaginatedResponse } from '../types.js';
+
+/**
+ * 通过 identifier 获取工作项详情
+ * GET /v1/project/work_items?identifier={identifier}
+ */
+export async function getWorkItemByIdentifier(
+  identifier: string,
+  signal?: AbortSignal,
+  includeImageToken: boolean = true
+): Promise<PingCodeWorkItem | null> {
+  try {
+    const params: Record<string, string | number | undefined> = { identifier };
+    if (includeImageToken) {
+      params.include_public_image_token = 'true';
+    }
+    const response = await apiClient.request<PaginatedResponse<PingCodeWorkItem>>(
+      '/v1/project/work_items',
+      { params, signal }
+    );
+
+    // 返回列表中的第一个匹配项
+    if (response.values && response.values.length > 0) {
+      const workItem = response.values[0];
+      // 缓存结果（使用 ID 作为 key）
+      await cache.set(
+        CacheKeys.workItem(workItem.id),
+        workItem,
+        config.cache.ttlWorkItems
+      );
+      return workItem;
+    }
+
+    return null;
+  } catch (error) {
+    if (error instanceof PingCodeApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
 
 /**
  * 获取工作项详情
  * GET /v1/project/work_items/{project_work_item_id}
  */
-export async function getWorkItem(workItemId: string, signal?: AbortSignal): Promise<PingCodeWorkItem | null> {
-  // Try cache first
+export async function getWorkItem(
+  workItemId: string,
+  signal?: AbortSignal,
+  includeImageToken: boolean = true
+): Promise<PingCodeWorkItem | null> {
+  // Try cache first (note: cached items may not have image token)
   const cached = await cache.get<PingCodeWorkItem>(CacheKeys.workItem(workItemId));
-  if (cached) {
+  if (cached && (!includeImageToken || cached.public_image_token)) {
     return cached;
   }
 
   try {
+    const params: Record<string, string | number | undefined> = {};
+    if (includeImageToken) {
+      params.include_public_image_token = 'true';
+    }
     const workItem = await apiClient.request<PingCodeWorkItem>(
       `/v1/project/work_items/${workItemId}`,
-      { signal }
+      { params, signal }
     );
 
     // Cache the result
